@@ -93,19 +93,39 @@ if __name__ == '__main__':
             "https://icanhazip.com",
             "https://checkip.amazonaws.com",
             "http://ipinfo.io/ip",
+            "http://checkip.dyndns.org",
         )
         for ip_service in ip_services:
             try:
-                resp = requests.get(ip_service, timeout=5, headers={'User-Agent': 'curl/7.68.0'})
+                resp = requests.get(ip_service, timeout=4, headers={'User-Agent': 'curl/7.88.1'})
                 if resp.status_code == 200:
-                    candidate = resp.text.strip()
-                    # Basic sanity check for IP address format
-                    if candidate and len(candidate.split('.')) == 4:
-                        public_ip = candidate
-                        print(f"   ✓ Detected public IP: {public_ip} (via {ip_service})")
-                        break
-            except Exception as e:
+                    import re
+                    match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', resp.text)
+                    if match:
+                        candidate = match.group(1)
+                        if not candidate.startswith(("127.", "10.", "192.168.", "172.16.")):
+                            public_ip = candidate
+                            print(f"   ✓ Detected public IP: {public_ip} (via {ip_service})")
+                            break
+            except Exception:
                 continue
+
+        # If HTTP requests timed out or failed, try system curl directly
+        if not public_ip:
+            import subprocess
+            for ip_cmd in ("curl -s4 ifconfig.me", "curl -s4 icanhazip.com", "curl -s4 api.ipify.org"):
+                try:
+                    out = subprocess.check_output(ip_cmd, shell=True, timeout=3, stderr=subprocess.DEVNULL).decode().strip()
+                    import re
+                    match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', out)
+                    if match:
+                        candidate = match.group(1)
+                        if not candidate.startswith(("127.", "10.", "192.168.", "172.16.")):
+                            public_ip = candidate
+                            print(f"   ✓ Detected public IP: {public_ip} (via system {ip_cmd})")
+                            break
+                except Exception:
+                    continue
 
         if public_ip:
             server_url = f"http://{public_ip}:{config.API_PORT}"
