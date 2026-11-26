@@ -24,29 +24,41 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo -e "${YELLOW}[1/5] Checking and installing system dependencies...${NC}"
 
 install_pkg() {
+    SUDO_CMD=""
+    if [ "$(id -u)" -ne 0 ] && command -v sudo &>/dev/null; then
+        SUDO_CMD="sudo"
+    fi
+
     if command -v apt-get &>/dev/null; then
-        echo -e "${CYAN}→ Debian/Ubuntu detected. Installing Python3 & venv...${NC}"
-        sudo apt-get update -y && sudo apt-get install -y python3 python3-pip python3-venv curl
+        echo -e "${CYAN}→ Debian/Ubuntu detected. Installing Python packages...${NC}"
+        $SUDO_CMD apt-get update -y
+        # Try generic python3-venv, python3-pip, and ensurepip
+        $SUDO_CMD apt-get install -y python3 python3-pip python3-venv curl
+        # On Ubuntu 24.04+, specific python3.12-venv may be needed:
+        PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "3")
+        $SUDO_CMD apt-get install -y "python${PY_VER}-venv" 2>/dev/null || true
     elif command -v dnf &>/dev/null; then
         echo -e "${CYAN}→ RHEL/CentOS/Fedora detected. Installing Python3 & pip...${NC}"
-        sudo dnf install -y python3 python3-pip curl
+        $SUDO_CMD dnf install -y python3 python3-pip curl
     elif command -v yum &>/dev/null; then
         echo -e "${CYAN}→ Yum detected. Installing Python3 & pip...${NC}"
-        sudo yum install -y python3 python3-pip curl
+        $SUDO_CMD yum install -y python3 python3-pip curl
     elif command -v pacman &>/dev/null; then
         echo -e "${CYAN}→ Arch Linux detected. Installing Python3...${NC}"
-        sudo pacman -Sy --noconfirm python python-pip curl
+        $SUDO_CMD pacman -Sy --noconfirm python python-pip curl
     fi
 }
 
+# Check if ensurepip is available (Ubuntu splits ensurepip into python3-venv)
+NEED_INSTALL=0
 if ! command -v python3 &>/dev/null; then
-    echo -e "${YELLOW}python3 not found. Attempting automatic installation...${NC}"
-    install_pkg
+    NEED_INSTALL=1
+elif ! python3 -c 'import venv, ensurepip' &>/dev/null; then
+    NEED_INSTALL=1
 fi
 
-# Ensure venv module is present
-if ! python3 -c 'import venv' &>/dev/null; then
-    echo -e "${YELLOW}python3-venv missing. Attempting automatic installation...${NC}"
+if [ "$NEED_INSTALL" -eq 1 ]; then
+    echo -e "${YELLOW}python3 or python3-venv/ensurepip missing. Installing...${NC}"
     install_pkg
 fi
 
@@ -60,12 +72,14 @@ echo -e "${GREEN}✓ $("$PYTHON_BIN" --version) ready${NC}"
 # ── 2. Virtual Environment Setup ──────────────────────────────────────────────
 echo -e "${YELLOW}[2/5] Setting up Python virtual environment...${NC}"
 VENV_DIR="$SCRIPT_DIR/venv"
-if [ ! -d "$VENV_DIR" ]; then
-    "$PYTHON_BIN" -m venv "$VENV_DIR"
-    echo -e "${GREEN}✓ Virtual environment created at $VENV_DIR${NC}"
-else
-    echo -e "${GREEN}✓ Virtual environment already exists${NC}"
+rm -rf "$VENV_DIR" 2>/dev/null || true
+
+if ! "$PYTHON_BIN" -m venv "$VENV_DIR"; then
+    echo -e "${YELLOW}⚠ venv creation failed. Retrying with --without-pip fallback...${NC}"
+    install_pkg
+    "$PYTHON_BIN" -m venv "$VENV_DIR" || "$PYTHON_BIN" -m venv --without-pip "$VENV_DIR"
 fi
+echo -e "${GREEN}✓ Virtual environment created at $VENV_DIR${NC}"
 
 VENV_PYTHON="$VENV_DIR/bin/python"
 VENV_PIP="$VENV_DIR/bin/pip"
