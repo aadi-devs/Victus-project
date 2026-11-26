@@ -110,17 +110,23 @@ if __name__ == '__main__':
         if public_ip:
             server_url = f"http://{public_ip}:{config.API_PORT}"
         else:
-            print("   ⚠️ Could not reach public IP services, falling back to localhost")
-            server_url = f"http://localhost:{config.API_PORT}"
+            print("   ⚠️ Could not detect public IP. Localhost will NOT be registered to Supabase.")
+            server_url = None
 
-    print(f"\n{'='*70}")
-    print(f"  🌐  {server_url}")
-    print(f"{'='*70}\n")
+    if server_url:
+        print(f"\n{'='*70}")
+        print(f"  🌐  {server_url}")
+        print(f"{'='*70}\n")
 
-    if register_url(server_url):
-        print(f"✅  API is live at {server_url}\n")
+        if register_url(server_url):
+            print(f"✅  API is live at {server_url}\n")
+        else:
+            print(f"⚠️   Supabase registration failed — API still running at {server_url}\n")
     else:
-        print(f"⚠️   Supabase registration failed — API still running at {server_url}\n")
+        local_url = f"http://localhost:{config.API_PORT}"
+        print(f"\n{'='*70}")
+        print(f"  🌐  {local_url} (Local only, not registered to Supabase)")
+        print(f"{'='*70}\n")
 
     # Keep main thread alive
     try:

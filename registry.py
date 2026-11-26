@@ -18,6 +18,11 @@ def register_url(url: str) -> bool:
     if not url:
         return False
 
+    # Never register localhost or loopback addresses in Supabase
+    if "localhost" in url or "127.0.0.1" in url:
+        print(f"⛔ Skipped Supabase registration: '{url}' is a local loopback address.")
+        return False
+
     headers = {
         'apikey': config.SUPABASE_KEY,
         'Authorization': f'Bearer {config.SUPABASE_KEY}',
