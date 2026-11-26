@@ -85,18 +85,32 @@ if __name__ == '__main__':
         server_url = f"https://{domain}"
     else:
         # Detect public IP on VPS
+        print("🔍 Detecting VPS public IP address...")
         public_ip = None
-        for ip_service in ("https://api.ipify.org", "https://ifconfig.me/ip", "https://icanhazip.com"):
+        ip_services = (
+            "https://api.ipify.org",
+            "https://ifconfig.me/ip",
+            "https://icanhazip.com",
+            "https://checkip.amazonaws.com",
+            "http://ipinfo.io/ip",
+        )
+        for ip_service in ip_services:
             try:
-                resp = requests.get(ip_service, timeout=3)
-                if resp.status_code == 200 and resp.text.strip():
-                    public_ip = resp.text.strip()
-                    break
-            except Exception:
+                resp = requests.get(ip_service, timeout=5, headers={'User-Agent': 'curl/7.68.0'})
+                if resp.status_code == 200:
+                    candidate = resp.text.strip()
+                    # Basic sanity check for IP address format
+                    if candidate and len(candidate.split('.')) == 4:
+                        public_ip = candidate
+                        print(f"   ✓ Detected public IP: {public_ip} (via {ip_service})")
+                        break
+            except Exception as e:
                 continue
+
         if public_ip:
             server_url = f"http://{public_ip}:{config.API_PORT}"
         else:
+            print("   ⚠️ Could not reach public IP services, falling back to localhost")
             server_url = f"http://localhost:{config.API_PORT}"
 
     print(f"\n{'='*70}")
